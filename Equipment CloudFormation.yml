@@ -1,0 +1,471 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: VPC Create Stack File
+Parameters:
+  InstanceType:
+    Description: EC2 instance type Choice
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t1.micro
+      - t2.nano
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+      - m1.small
+      - m1.medium
+      - m1.large
+      - m1.xlarge
+      - m2.xlarge
+      - m2.2xlarge
+      - m2.4xlarge
+      - m3.medium
+      - m3.large
+      - m3.xlarge
+      - m3.2xlarge
+      - m4.large
+      - m4.xlarge
+      - m4.2xlarge
+      - m4.4xlarge
+      - m4.10xlarge
+
+  OperatorEMail:
+    Type: String
+    AllowedPattern: >-
+      ([a-zA-Z0-9_\-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)
+    ConstraintDescription: Admin email address.
+
+  KeyName:
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: EC2 Key Pair Choice
+
+  DBName:
+    Default: KGRDS
+    Description: The database name
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+
+  DBUser:
+    NoEcho: 'true'
+    Description: The database admin account username
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+
+  DBPassword:
+    NoEcho: 'true'
+    Description: The database admin account password
+    Type: String
+    MinLength: '1'
+    MaxLength: '41'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+
+  DBInstanceClass:
+    Description: The database instance type
+    Type: String
+    Default: db.t2.micro
+    AllowedValues:
+      - db.t1.micro
+      - db.m1.small
+      - db.m1.medium
+      - db.m1.large
+      - db.m1.xlarge
+      - db.m2.xlarge
+      - db.m2.2xlarge
+      - db.m2.4xlarge
+      - db.m3.medium
+      - db.m3.large
+      - db.m3.xlarge
+      - db.m3.2xlarge
+      - db.m4.large
+      - db.m4.xlarge
+      - db.m4.2xlarge
+      - db.m4.4xlarge
+      - db.m4.10xlarge
+      - db.r3.large
+      - db.r3.xlarge
+      - db.r3.2xlarge
+      - db.r3.4xlarge
+      - db.r3.8xlarge
+      - db.m2.xlarge
+      - db.m2.2xlarge
+      - db.m2.4xlarge
+      - db.cr1.8xlarge
+      - db.t2.micro
+      - db.t2.small
+      - db.t2.medium
+      - db.t2.large
+
+  DBAllocatedStorage:
+    Default: '20'
+    Description: The size of the database (Gb)
+    Type: Number
+    MinValue: '20'
+    MaxValue: '1000'
+
+  MultiAZ:
+    Description: Multi-AZ master database
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+Resources:
+  # VPC Create
+  KGVPC:
+      Type: AWS::EC2::VPC
+      Properties:
+          EnableDnsSupport: true
+          EnableDnsHostnames: true
+          CidrBlock: 10.0.0.0/16
+          InstanceTenancy: default
+          Tags:
+           - Key: Name
+             Value: KGVPC       
+
+  # VPC Subnet Create
+  Subnet1:
+      Type: AWS::EC2::Subnet
+      Properties:
+          AvailabilityZone: ap-northeast-2a
+          CidrBlock: 10.0.1.0/24
+          MapPublicIpOnLaunch: true
+          VpcId: !Ref KGVPC
+          Tags:
+           - Key: Name
+             Value: Public-Subnet-1
+
+  Subnet2:
+      Type: AWS::EC2::Subnet
+      Properties:
+          AvailabilityZone: ap-northeast-2c
+          CidrBlock: 10.0.2.0/24
+          MapPublicIpOnLaunch: true
+          VpcId: !Ref KGVPC
+          Tags:
+           - Key: Name
+             Value: Public-Subnet-2
+
+  Subnet3:
+      Type: AWS::EC2::Subnet
+      Properties:
+          AvailabilityZone: ap-northeast-2a
+          CidrBlock: 10.0.3.0/24
+          VpcId: !Ref KGVPC
+          Tags:
+           - Key: Name
+             Value: Private-Subnet-1
+
+  Subnet4:
+      Type: AWS::EC2::Subnet
+      Properties:
+          AvailabilityZone: ap-northeast-2c
+          CidrBlock: 10.0.4.0/24
+          VpcId: !Ref KGVPC
+          Tags:
+           - Key: Name
+             Value: Private-Subnet-2
+
+  # Internet Gateway Create
+  KGIGW:
+      Type: AWS::EC2::InternetGateway
+      Properties:
+          Tags:
+           - Key: Name
+             Value: KGIGW
+
+  # VPC To IGW
+  IGWToInternet:
+      Type: AWS::EC2::VPCGatewayAttachment
+      Properties:
+          VpcId: !Ref KGVPC
+          InternetGatewayId: !Ref KGIGW
+
+  # Routing Table Create
+  KGRoutingTablePublic:
+      Type: AWS::EC2::RouteTable
+      Properties:
+          VpcId: !Ref KGVPC
+          Tags:
+           - Key: Name
+             Value: Public Routing_Table
+
+  KGRoutingTablePrivate:
+      Type: AWS::EC2::RouteTable
+      Properties:
+          VpcId: !Ref KGVPC
+          Tags:
+           - Key: Name
+             Value: Private Routing_Table
+
+  # Routing Table Add Subnet (Public)
+  KGSubnetRoutingTablePublic1:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+          SubnetId: !Ref Subnet1      
+          RouteTableId: !Ref KGRoutingTablePublic
+
+  KGSubnetRoutingTablePublic2:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+          SubnetId: !Ref Subnet2      
+          RouteTableId: !Ref KGRoutingTablePublic
+
+  # Routing Table Add Subnet (Private)
+  KGSubnetRoutingTablePrivate1:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+          SubnetId: !Ref Subnet3
+          RouteTableId: !Ref KGRoutingTablePrivate
+
+  KGSubnetRoutingTablePrivate2:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+          SubnetId: !Ref Subnet4
+          RouteTableId: !Ref KGRoutingTablePrivate
+
+  # Routing Table Add IGW
+  KGRoute:
+      Type: AWS::EC2::Route
+      DependsOn: IGWToInternet
+      Properties:
+          RouteTableId: !Ref KGRoutingTablePublic
+          DestinationCidrBlock: 0.0.0.0/0
+          GatewayId: !Ref KGIGW
+
+  # Security Group Create
+  LoadBalancerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: LoadBalancer Allow HTTP HTTPS
+      GroupName: KGLBSG
+      VpcId: !Ref KGVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+
+  InstanceSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Instance Allow LB SSH
+      GroupName: KGInstanceSG
+      VpcId: !Ref KGVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0            
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        SourceSecurityGroupId: !Ref LoadBalancerSG
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        SourceSecurityGroupId: !Ref LoadBalancerSG
+
+  # LoadBalancer Create
+  KGLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: ipv4
+      Name: KGELB
+      Scheme: internet-facing      
+      SecurityGroups:
+      - !Ref LoadBalancerSG
+      Subnets: 
+      - !Ref Subnet1
+      - !Ref Subnet2
+      Type: application
+
+  # ELB TargetGroup Create
+  KGTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: true
+      Name: KGTG
+      TargetType: instance
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref KGVPC
+
+  # ELB Listener Create
+  ELBlistener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      DefaultActions:
+        - Type: forward
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref KGTargetGroup
+                Weight: 1
+      LoadBalancerArn: !Ref KGLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  # ASG LaunchConfiguration Create
+  KGASGLaunchConfiguration:
+    Type: "AWS::AutoScaling::LaunchConfiguration"
+    Properties:
+      LaunchConfigurationName: KGAS
+      InstanceMonitoring: true      
+      ImageId: ami-006e2f9fa7597680a 
+      InstanceType: !Ref InstanceType 
+      KeyName: !Ref KeyName
+      SecurityGroups:
+        - !Ref InstanceSG
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 10    
+            VolumeType: gp2
+            DeleteOnTermination: true
+
+  # AutoScaling Group Create
+  NotificationTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      Subscription:
+        - Endpoint: !Ref OperatorEMail
+          Protocol: email
+
+  KGAutoScalingGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      AutoScalingGroupName: KGASG
+      VPCZoneIdentifier: 
+        - !Ref Subnet1
+        - !Ref Subnet2
+      LaunchConfigurationName: !Ref KGASGLaunchConfiguration
+      MinSize: '2'
+      MaxSize: '4'
+      TargetGroupARNs:
+        - !Ref KGTargetGroup
+      NotificationConfiguration:
+        TopicARN: !Ref NotificationTopic
+        NotificationTypes:
+          - 'autoscaling:EC2_INSTANCE_LAUNCH'
+          - 'autoscaling:EC2_INSTANCE_LAUNCH_ERROR'
+          - 'autoscaling:EC2_INSTANCE_TERMINATE'
+          - 'autoscaling:EC2_INSTANCE_TERMINATE_ERROR' 
+      Tags: 
+        - Key: Name
+          PropagateAtLaunch: true
+          Value: KGASG-Instance
+
+  # Scaling Policy Create
+  ScaleUpPolicy:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref KGAutoScalingGroup
+      Cooldown: '60'
+      ScalingAdjustment: '1'
+
+  ScaleDownPolicy:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref KGAutoScalingGroup
+      Cooldown: '60'
+      ScalingAdjustment: '-1'
+
+  CPUAlarmHigh:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Scale-up if CPU >= 80% for 1 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '1'
+      Threshold: '80'
+      AlarmActions:
+        - !Ref ScaleUpPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref KGAutoScalingGroup
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+
+  CPUAlarmLow:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Scale-down if CPU < 50% for 1 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '1'
+      Threshold: '50'
+      AlarmActions:
+        - !Ref ScaleDownPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref KGAutoScalingGroup
+      ComparisonOperator: LessThanThreshold
+
+  # DB Access Security Group Create
+  DBSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS Allow KGSQL
+      GroupName: KGDBSG
+      VpcId: !Ref KGVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 10.0.0.0/16
+
+  # RDS Subnet Group Create
+  KGDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties: 
+      DBSubnetGroupDescription: KG RDS Subnet Group (Private Subnet)
+      SubnetIds: 
+        - !Ref Subnet3
+        - !Ref Subnet4
+
+  # RDS Create
+  KGMasterDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: KGRDS
+      DBName: !Ref DBName
+      DBInstanceClass: !Ref DBInstanceClass
+      StorageType: gp2
+      AllocatedStorage: !Ref DBAllocatedStorage
+      Engine: MariaDB
+      EngineVersion: 10.4.13
+      MasterUsername: !Ref DBUser
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref KGDBSubnetGroup
+      VPCSecurityGroups:
+        - Ref: DBSG
+      PubliclyAccessible: false
+      DeleteAutomatedBackups: true
+      MultiAZ: !Ref MultiAZ
+      Tags:
+        - Key: Name
+          Value: Master Database
+          
+  ReplicaDB:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      SourceDBInstanceIdentifier: !Ref KGMasterDB
+      DBInstanceClass: !Ref DBInstanceClass
+      Tags:
+        - Key: Name
+          Value: Read Replica Database
+
+
